@@ -33,18 +33,31 @@ class PlayerClass:
         self.stopped = False
         self.if_paused = False
         self.muted = False
+        self.if_random = False
 
         self.songs_dict = {}
 
         self.master = master
-        master.title("Mp3 player")
+        master.title("Noizemaker")
 
         self.main_frame = Frame(master)
         self.main_frame.pack(pady=20)
 
+
+        self.lisbox_frame = Frame(self.main_frame)
+        self.lisbox_frame.grid(row=0, column=0)
+
+        #create scrollbar for listbox
+        self.scrollbar = Scrollbar(self.lisbox_frame, orient=VERTICAL)
         # create playlist box
-        self.song_listbox = Listbox(self.main_frame, fg='black', width=60)
-        self.song_listbox.grid(row=0, column=0)
+        self.song_listbox = Listbox(self.lisbox_frame, fg='black', width=60, yscrollcommand=self.scrollbar.set)
+
+        self.scrollbar.config(command=self.song_listbox.yview)
+        self.scrollbar.pack(side=RIGHT, fill=Y)
+
+       # self.song_listbox.grid(row=0, column=0)
+        self.song_listbox.pack(side=LEFT, fill=BOTH, expand=1)
+
 
         # Defining and resizing buton images
         self.play_img = Image.open(FILES_DIRECTORY + "play.png")
@@ -89,6 +102,7 @@ class PlayerClass:
         self.filemenu.add_command(label="Clear playlist", command=self.clear_playlist)
         self.filemenu.add_command(label="Save as playlist", command=self.save_dict)
         self.filemenu.add_command(label="Open playlist", command=self.choose_playlist)
+        self.filemenu.add_command(label="Open all mp3 files", command=lambda: self.open_all(self.get_files("D:\\")))
 
         self.filemenu.add_separator()
         self.filemenu.add_command(label="Quit", command=master.quit)
@@ -125,14 +139,18 @@ class PlayerClass:
         self.resized = self.volume_img.resize((50, 50), Image.ANTIALIAS)
         self.volume_img = ImageTk.PhotoImage(self.resized)
 
+        self.voice_frame = Frame(master)
+        self.voice_frame.pack(pady=10)
+
         # create voice recognition status box
-        self.voice_label = Label(master, fg='black', width=50, bg='white')
-        self.voice_label.pack(pady=10)
+        self.voice_label = Label(self.voice_frame, fg='black', width=50, bg='white')
         self.voice_label.config(text='Waiting for your commands...')
+        self.voice_label.grid(row=2, column=0)
 
         # voice button
-        self.voice_btn = Button(self.master, text="use voice", command=lambda: Thread(target=self.voice_commands).start())
-        self.voice_btn.pack(pady=10)
+        self.voice_btn = Button(self.voice_frame, text="Use voice", command=lambda: Thread(target=self.voice_commands).start())
+        self.voice_btn.grid(row=2, column=1, padx=10)
+
 
         # adding a status bar
         # anchor=E -> east, we put the text to the right side
@@ -254,7 +272,9 @@ class PlayerClass:
         Can be called with 'play' button
         """
         # set to false so song can by played
+        self.stop()
         self.stopped = False
+        self.if_paused = False
         # loading the song
         song = self.song_listbox.get(ACTIVE)
         song = self.songs_dict.get(song)
@@ -270,11 +290,12 @@ class PlayerClass:
         Can be called with 'stop' button
         """
         # reset slider when stopped
-        self.statusbar.config(text='stopped')
+        # self.statusbar.config(text='stopped')
         self.song_slider.config(value=0)
         # stop playing
         pygame.mixer.music.stop()
         self.song_listbox.selection_clear(ACTIVE)
+        # self.statusbar.config(text='')
         # set status
         self.stopped = True
 
@@ -290,6 +311,7 @@ class PlayerClass:
             self.if_paused = False
         else:
             pygame.mixer.music.pause()
+            self.statusbar.config(text="paused")
             self.if_paused = True
 
     def next(self):
@@ -300,9 +322,12 @@ class PlayerClass:
         self.statusbar.config(text='')
         self.song_slider.config(value=0)
         # get current song's index (needs fix)
-        next_song = self.song_listbox.curselection()
-        next_song = next_song[0] + 1
-        song = self.song_listbox.get(next_song)
+        try:
+            next_song = self.song_listbox.curselection()
+            next_song = next_song[0] + 1
+            song = self.song_listbox.get(next_song)
+        except IndexError:
+            pass
 
         # song = f'{song}.mp3'
         song = self.songs_dict.get(song)
@@ -351,6 +376,7 @@ class PlayerClass:
         else:
             pass
 
+
     def clear_playlist(self):
         """
         Function clear_playlist() is used to remove all the songs from listbox playlist.
@@ -370,6 +396,9 @@ class PlayerClass:
     def get_song_time(self):
         if self.stopped:
             return
+        if self.if_paused:
+            return
+
         curr_time = pygame.mixer.music.get_pos() / 1000
         formated_time = time.strftime('%M:%S', time.gmtime(curr_time))
         # get current song
@@ -402,14 +431,6 @@ class PlayerClass:
             moved_time = int(self.song_slider.get()) + 1
             self.song_slider.config(value=moved_time)
         self.statusbar.after(1000, self.get_song_time)
-
-
-    def pause(self, paused):
-        if self.if_paused:
-            pygame.mixer.music.unpause()
-        else:
-            pygame.mixer.music.pause()
-            self.if_paused = True
 
 
     def voice_commands(self):
@@ -458,8 +479,44 @@ class PlayerClass:
                     print("Error: " + str(e))
 
 
+    def get_files(self, root):
+        files = []
+        def scan_dir(dir):
+            for f in os.listdir(dir):
+                try:
+                    f = os.path.join(dir, f)
+                    if os.path.isdir(f):
+                        scan_dir(f)
+                    elif os.path.splitext(f)[1] == ".mp3":
+                        files.append(f)
+                except PermissionError:
+                    pass
+        scan_dir(root)
+        print(files)
+        return files
+
+    def open_all(self, path_list):
+        for path in path_list:
+            # formatting every file to get only it's name
+            filemane = path.split('\\')[-1].split('.')[0]
+            #print(filemane)
+            self.songs_dict[filemane] = path
+            self.song_listbox.insert(END, filemane)
+        print(self.songs_dict)
+
+
+# def search_C_and_D():
+#     file_D = get_files('D:\\')
+#     file_C = get_files('C:\\')
+#     file_D.extend(file_C)
+#     return file_D
+
+
 
 def run_gui():
+    # file = search_all_system()
+    # file = get_files("D:\\")
+
     pygame.mixer.init()
     root = Tk()
     root.geometry("600x500")
