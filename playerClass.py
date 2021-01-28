@@ -10,13 +10,9 @@ import json
 from threading import Thread
 import time
 import random
-
 from globals import FILES_DIRECTORY, JSON_DIRECTORY, CONFIG_DIRECTORY
+
 global my_gui
-
-
-# TODO: 1) what button was pressed on statusbar
-#       2) IndexError: tuple index out of range on forward when nothin selected
 
 
 class PlayerClass:
@@ -88,6 +84,12 @@ class PlayerClass:
         self.stop_btn.grid(row=0, column=3, padx=10)
         self.next_btn.grid(row=0, column=4, padx=10)
         self.shuffle_btn.grid(row=0, column=5, padx=10)
+
+        # Defining and resizing shuffle images
+        self.shuffle_on = Image.open(FILES_DIRECTORY + "shuffle_on.png")
+        self.resized = self.shuffle_on.resize((50, 50), Image.ANTIALIAS)
+        self.shuffle_on = ImageTk.PhotoImage(self.resized)
+
 
         # creating menu bar
         self.menubar = Menu(master)
@@ -163,7 +165,8 @@ class PlayerClass:
     # adding a toplevel window for choosing a playlist
     def choose_playlist(self):
         """
-        Function choose_playlist opens a toplevel window with the list of saved playlists and different controls
+        Function choose_playlist opens a toplevel window with the list of saved playlists and different controls.
+        Has nested methods for some playlist operations.
         """
         # fill categories dict with data
         file_path = CONFIG_DIRECTORY + 'categories.json'
@@ -173,20 +176,24 @@ class PlayerClass:
         # creating toplevel frame for playlists
         self.playlist_toplvl = Toplevel()
         self.playlist_toplvl.title("Open playlist")
-        self.playlist_toplvl.geometry("400x300")
+        self.playlist_toplvl.geometry("430x300")
         self.playlist_toplvl.iconbitmap(f'{FILES_DIRECTORY}note.ico')
 
         # main toplevel frame:
         toplvl_frame = Frame(self.playlist_toplvl)
-        toplvl_frame.pack(pady=10)
+        toplvl_frame.pack()
 
-        listbox_frame = Frame(toplvl_frame)
+        left_frame = Frame(toplvl_frame)
+        left_frame.grid(row=0, column=0)
+
+        listbox_frame = Frame(left_frame)
         listbox_frame.grid(row=0, column=0)
 
         pllst_scrollbar = Scrollbar(listbox_frame, orient=VERTICAL)
 
         # adding a list with playlists
-        self.list_of_playlists = Listbox(listbox_frame, fg='black', width=30, height=7, yscrollcommand=pllst_scrollbar.set)
+        self.list_of_playlists = Listbox(listbox_frame, fg='black', width=30, height=7,
+                                         yscrollcommand=pllst_scrollbar.set)
         self.list_of_playlists.pack(pady=10, side=LEFT, fill=BOTH, expand=1)
         # configure scrollbar
         pllst_scrollbar.config(command=self.list_of_playlists.yview())
@@ -202,11 +209,12 @@ class PlayerClass:
                 for fl in files:
                     arr_of_playlists.append(fl)
             return arr_of_playlists
+
         arr_of_playlists = get_all_playlists()  # arr_of_playlists has paths of all playlists
 
         # adding controls and defining controls flame
-        controls_frame = Frame(toplvl_frame)
-        controls_frame.grid(row=1, column=0)
+        controls_frame = Frame(left_frame)
+        controls_frame.grid(row=1, column=0, pady=10, padx=10)
         open_pllst_btn = Button(controls_frame, text="Open playlist", bg="#cbffc4",
                                 command=lambda: self.read_json(self.list_of_playlists.get(ACTIVE)))
         open_pllst_btn.grid(row=0, column=0, padx=10)
@@ -219,23 +227,22 @@ class PlayerClass:
             filemane = file.split('\\')[-1].split('.')[0]
             self.list_of_playlists.insert(END, filemane)
 
+        # creating right side frame for filter and category buttons
         right_frame = Frame(toplvl_frame)
         right_frame.grid(row=0, column=1)
-        # creating dropdown list
-        # variable = StringVar(self.playlist_toplvl)
+
+        # fill the dropdown list with category names
         variable = StringVar(right_frame)
         OPTIONS = self.cat_dict.keys()
         try:
             variable.set(list(self.cat_dict.keys())[0])  # default value
         except IndexError:
-             pass  # do nothothing if category dict is empty
-
-
-        # creating dropdown option menu
-        w = OptionMenu(right_frame, variable, *OPTIONS)
-        w.grid(row=4, column=0, padx=10)
+            pass  # do nothothing if category dict is empty
 
         def print_filtered_playlists():
+            """
+            Function print_filtered_playlists() is used to display only playlists of chosen category.
+            """
             # get current option
             filter = variable.get()
             print(filter)
@@ -255,7 +262,6 @@ class PlayerClass:
             for file in arr_of_playlists:
                 filename = file.split('/')[-1].split('.')[0]
                 self.list_of_playlists.insert(END, filename)
-
 
         def add_to_category():
             """
@@ -278,22 +284,41 @@ class PlayerClass:
                         # add to category dict:
                         for el in self.cat_dict.get(variable.get()):
                             if el == file:
-                                counter +=1
+                                counter += 1
                                 messagebox.showinfo("Error!",
                                                     f"Playslist {filename} is already in category {variable.get()}.")
-
                         if counter == 0:
                             print("else")
                             self.cat_dict[variable.get()].append(file)
                             self.rewrite_cat_file()
-                            messagebox.showinfo("Succesfully added!", f"Playslist {filename} added to category {variable.get()}.")
+                            messagebox.showinfo("Succesfully added!",
+                                                f"Playslist {filename} added to category {variable.get()}.")
                             return
                     else:
                         pass
             else:
                 pass
 
+        def delete_category():
+            """
+            Function delete_category() is used to remove category from categories file
+            """
+            answer = messagebox.askyesno("Delete category", f"Do you want to delete category '{variable.get()}'?")
+            if answer:
+                key = variable.get()
+                del self.cat_dict[key]
+                OPTIONS = self.cat_dict.keys()
+                self.rewrite_cat_file()
+                messagebox.showinfo("Success!",
+                                    f"Category {key} removed, open the playlist window again to see changes.")
+                self.playlist_toplvl.destroy()
+            else:
+                pass
+
         def remove_filter():
+            """
+            Function remove_filter() is used to remove category filter and to display all playlists
+            """
             self.list_of_playlists.delete(0, END)
             arr_of_playlists = get_all_playlists()
             for file in arr_of_playlists:
@@ -301,15 +326,31 @@ class PlayerClass:
                 filemane = file.split('\\')[-1].split('.')[0]
                 self.list_of_playlists.insert(END, filemane)
 
-        add_to_cat_btn = Button(right_frame, text="Add playlist to category", command=add_to_category)
-        add_to_cat_btn.grid(row=0, column=0, padx=10)
+        # adding buttons and other elements
+        # creating dropdown option menu
+        filter_btn_frame = LabelFrame(right_frame, text="Filter by category", bg="#ededed")
+        filter_btn_frame.grid(row=1, column=0)
+        filter_btn = Button(filter_btn_frame, text="Filter", command=print_filtered_playlists)
+        filter_btn.grid(row=0, column=0, padx=10, pady=10)
+        remove_filter_btn = Button(filter_btn_frame, text="Remove filter", command=remove_filter)
+        remove_filter_btn.grid(row=0, column=1, padx=10)
 
-        filter_btn = Button(right_frame, text="Filter", command=print_filtered_playlists)
-        filter_btn.grid(row=2, column=0, padx=10, pady=10)
-        filter_btn = Button(right_frame, text="Remove filter", command=remove_filter)
-        filter_btn.grid(row=3, column=0, padx=10, pady=10)
-        self.btn = Button(right_frame, text="Create new category", command=self.create_category)
+        # create category frame
+        category_frame = LabelFrame(right_frame, text="Playlist category", bg="#ededed")
+        category_frame.grid(row=0, column=0, padx=10, pady=20)
+        self.btn = Button(category_frame, text="Create new category", command=self.create_category)
+        self.btn.grid(row=0, column=0, padx=10, pady=10)
+        self.btn = Button(category_frame, bg='#f29696', text="Remove selected category", command=delete_category)
         self.btn.grid(row=1, column=0, padx=10, pady=10)
+
+        add_to_cat_btn = Button(category_frame, text="Add playlist to category", command=add_to_category)
+        add_to_cat_btn.grid(row=2, column=0, padx=10)
+
+        w = OptionMenu(category_frame, variable, *OPTIONS)
+        w.grid(row=3, column=0, padx=10, pady=10)
+
+
+
 
     def save_dict(self):
         """
@@ -340,7 +381,7 @@ class PlayerClass:
             messagebox.showinfo("Error", "No playlist selected")
             return
 
-        file_path = JSON_DIRECTORY + f'{filename}.json' # bobux
+        file_path = JSON_DIRECTORY + f'{filename}.json'
 
         with open(file_path) as infile:
             # loading json content into into song dict
@@ -406,11 +447,15 @@ class PlayerClass:
         """
         print('shuffle')
         if self.if_random:
+            print('on')
             # turn the shuffle mode off
             self.if_random = False
+            self.shuffle_btn.configure(image=self.shuffle_img)
         else:
+            print('off')
             # turn it on
             self.if_random = True
+            self.shuffle_btn.configure(image=self.shuffle_on)
 
     def open_file(self):
         """
@@ -560,6 +605,10 @@ class PlayerClass:
             pass
 
     def get_song_time(self):
+        """
+        Function get_song_time is used to move the song slider position according to time elapsed
+        and to update sttusbar with current time and total sudio length
+        """
         if self.stopped:
             return
         if self.if_paused:
@@ -703,7 +752,8 @@ class PlayerClass:
         Function open_all is used to search through all possible directories and search for
         audio files that start with given string.
         """
-        filename = simpledialog.askstring("Search all system", "Search: (It will take some time)")
+        filename = simpledialog.askstring("Search all system", "Search: (It will take some time)\nNotise that search "
+                                                               "is case sensitive.")
         # self.statusbar.config(text='Please, wait, it might teake some time...')
         # check if there is any input:
         if filename == "" or filename is None:
@@ -736,7 +786,8 @@ class PlayerClass:
 
     def remove_playlist(self):
         """
-        Function remove_playlist is used to remove the chosen playlist from playlists folder
+        Function remove_playlist() is used to remove the chosen playlist from playlists folder
+        Also removes playlist from category it was in
         """
         playlist_name = self.list_of_playlists.get(ACTIVE)
 
@@ -746,50 +797,31 @@ class PlayerClass:
         answer = messagebox.askyesno("Remove", "Do you really want to remove this playlist?")
         if answer:
             if os.path.exists(f"{JSON_DIRECTORY}{playlist_name}.json"):
+                # remove playlist from categories file:
+                for key in self.cat_dict.keys():
+                    # iterate on keys:
+                    for el in self.cat_dict.get(key):
+                        # iterate on each key's list:
+                        if el == f'{playlist_name}.json':
+                            self.cat_dict.get(key).remove(el)
+                            self.rewrite_cat_file()
+
                 os.remove(f"{JSON_DIRECTORY}{playlist_name}.json")
                 self.list_of_playlists.delete(ANCHOR)
+
             else:
                 messagebox.showinfo("Error", "The file does not exist")
                 print("The file does not exist")
         else:
             pass
 
-    # def search_in_app(self):
-    #     """
-    #     Function search_in_app is used to find all saved playlists and find a song
-    #     with a given filename
-    #     """
-    #     song_to_find = simpledialog.askstring("Find mp3 file saved in application", "Name of the file:")
-    #     if song_to_find == "" or song_to_find is None:
-    #         messagebox.showinfo("Alert!", 'No file name was given')
-    #         return
-    #     # search jsons directory for all playlists, save them on list
-    #     json_files = [pos_json for pos_json in os.listdir(JSON_DIRECTORY) if pos_json.endswith('.json')]
-    #
-    #     for filename in json_files:
-    #         # iterate through all files in directory
-    #         file_path = JSON_DIRECTORY + f'{filename}'
-    #         with open(file_path) as infile:
-    #             # loading json content into into temp dict
-    #             temp_dict = json.load(infile)
-    #             if song_to_find in temp_dict:
-    #                 # if there is a song somewhere:
-    #                 print("in playlist: %s" % filename)
-    #                 song_path = temp_dict.get(song_to_find)
-    #                 self.songs_dict[song_to_find] = song_path
-    #                 self.song_listbox.insert(END, song_to_find)
-    #                 return
-    #     # if no matches found, show error messagee
-    #     messagebox.showinfo("Error", "There is no such file in application.")
-
-
-
     def search_in_app(self):
         """
         Function search_in_app is used to find all saved playlists and find a song
         with a given filename
         """
-        song_to_find = simpledialog.askstring("Find mp3 file saved in application", "Name of the file:")
+        song_to_find = simpledialog.askstring("Find mp3 file saved in application", "Name of the file:\n (notice - "
+                                                                                    "search is case sensitive)")
         if song_to_find == "" or song_to_find is None:
             messagebox.showinfo("Alert!", 'No file name was given')
             return
@@ -809,13 +841,10 @@ class PlayerClass:
             messagebox.showinfo("Error", "There's nothing like '%s' in application." % song_to_find)
             return
 
-        print(f"search{self.songs_dict}")
-
         for song in self.songs_dict:
             if self.song_listbox.get(END) == song:
                 continue
             self.song_listbox.insert(END, song)
-
 
     def create_category(self):
         category = simpledialog.askstring("Create category", "Name of the playlist category:")
@@ -825,6 +854,9 @@ class PlayerClass:
         self.cat_dict[category] = []
         print(self.cat_dict)
         self.rewrite_cat_file()
+        messagebox.showinfo("Success!", f"New category '{category}' created. Please, open playlists window again to "
+                                        f"see changes.")
+        self.playlist_toplvl.destroy()
 
     def rewrite_cat_file(self):
         file_path = CONFIG_DIRECTORY + 'categories.json'

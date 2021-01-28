@@ -3,12 +3,15 @@
     "Joy Division songs.json",
     "allsongs.json"
   ],
-  "ihjojn": [
+  "sad": [
     "playlist1.json",
     "Joy Division songs.json"
   ],
-  "qwerty": [
-    "qwerty.json"
+  "old songs": [
+    "The Smiths songs.json",
+    "Joy Division songs.json"
   ],
-  "oooo": []
+  "nowa": [
+    "nowy.json"
+  ]
 }
